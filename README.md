@@ -1,2 +1,2 @@
-# CSU_CS495
+# CSU_495
 Independent Study Using LORD Imu
