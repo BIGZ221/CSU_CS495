@@ -1,19 +1,19 @@
 #include <iostream>
 #include <iomanip>
-#include <fstream>
 #include <string>
-#include <sstream>
+#include <cstdint>
 #include <queue>
+#include <fstream>
 
 #include "data.h"
 #include "commands.h"
 
 using namespace std;
-
+using packet_t = vector<uint8_t>;
 
 // For each char in pkt print it to cout with a width of 2 and padding left with zeros, uint8_t doesn't play nice so you have
 // call unsigned() to force the char to print correctly because cout tries to do some conversion and unsigned() stops it
-void printPacket(const string &pkt) {
+void printPacket(const packet_t &pkt) {
     for (uint8_t i : pkt) {
         cout << setfill('0') << setw(2) << hex << unsigned(i);
     }
@@ -22,22 +22,20 @@ void printPacket(const string &pkt) {
 
 // Grab the last two bytes of the packet and return them as a uint16_t
 // Must cast from char to uint8_t then recast later to a uint16_t
-uint16_t getCheckSumFromPacket(string s) {
-    s = s.substr(s.length()-2);
-    uint8_t first = s[0];
-    uint8_t second = s[1];
+uint16_t getCheckSumFromPacket(const packet_t &s) {
+    uint8_t first = s[s.size()-2];
+    uint8_t second = s[s.size()-1];
    return (static_cast<uint16_t>(first) << 8) + static_cast<uint16_t>(second);
 }
 
 // Sum every byte in the packet except the last two then and sum the first sum each iteration
 // Overflow is ignored then you bitshift sum1 left 8 times and add in sum2's bits for final checksum
 // Values must be the type they are in this calculation
-uint16_t calcFletcherCheckSum(string s) {
-    s = s.substr(0, s.length()-2);
+uint16_t calcFletcherCheckSum(packet_t s) {
     uint8_t sum1 = 0;
     uint8_t sum2 = 0;
-    for (uint8_t i : s) {
-        sum1 = (sum1 + i);
+    for (uint8_t i = 0; i < s.size()-2; i++) {
+        sum1 = (sum1 + s[i]);
         sum2 = (sum2 + sum1);
     }
     return (static_cast<uint16_t>(sum1) << 8) + static_cast<uint16_t>(sum2);
@@ -51,12 +49,12 @@ uint16_t calcFletcherCheckSum(string s) {
 // TODO: Decide what to do with a packet if checksum is bad
 //      ignore?
 //
-void packetReader(fstream &in, queue<string> &pq) {
-    string pkt = "";
+void packetReader(fstream &in, queue<packet_t> &pq) {
+    packet_t pkt;
     char temp;
     while (in.get(temp)) {
         uint8_t pktByte = temp;
-        if (temp == 'u' && in.peek() == 'e' && pkt.length() > 0) { // If pkt isn't empty and you encounter "UE" then you are done reading in the previous packet
+        if (temp == 'u' && in.peek() == 'e' && pkt.size() > 0) { // If pkt isn't empty and you encounter "UE" then you are done reading in the previous packet
             in.putback(temp); // You read in a byte and you aren't ready so put it back ... if this fails explode? 
             //cout << "Packet Read!" << '\n'; // TODO: Remove this
             uint16_t checkSum = calcFletcherCheckSum(pkt);
@@ -69,7 +67,7 @@ void packetReader(fstream &in, queue<string> &pq) {
             } else {
                 pq.push(pkt);
             }
-            pkt = "";
+            pkt.clear();
         } else {
             pkt.push_back(pktByte); // Push the packet onto the packet buffer
         }
@@ -85,26 +83,28 @@ void packetReader(fstream &in, queue<string> &pq) {
 //      0x80 is IMU Data
 //      0x81 is GNSS Data
 //      0x82 is Estimation filter Data
-void parser(queue<string> &pq) {
-    int runs = 4;
+void parser(queue<packet_t> &pq) {
+    int runs = 8;
+    uint8_t firsta = 0;
+    uint8_t firstg = 0;
+    vector<float> accelBuffer[20];
+    vector<float> gyroBuffer[20];
     while (pq.size() > 0 && runs > 0) {
-        runs--;
-        string pkt = pq.front();
+        
+        //runs--;
+        packet_t pkt = pq.front();
         pq.pop();
         uint8_t descriptor = pkt[2];
         cout << hex << setfill('0') << setw(2) << unsigned(descriptor) << '\n';
         printPacket(pkt);
-        switch (descriptor)
-        {
+        switch (descriptor) {
         case 0x80:
-            imuHandler(pkt);
-            return;
+            imuHandler(pkt, accelBuffer, gyroBuffer, firsta, firstg);
+            //return;
             break;
         case 0x81:
-
             break;
         case 0x82:
-
             break;
         case 0x01:
             break;
@@ -120,18 +120,20 @@ void parser(queue<string> &pq) {
         }
         //break;
     }
+    for (vector<float> j : accelBuffer) {
+        char c = 'x';
+        for (float k : j) {
+            cout << c << ": " << k << '\n';
+            c += 1;
+        }
+        cout << '\n';
+    }
 }
 
 int main() { // Could probably do this with another thread or another process but for testing not doing that yet
     fstream in("testdata.bin");
-    queue<string> packetBuffer;
+    queue<packet_t> packetBuffer;
     packetReader(in, packetBuffer);
     parser(packetBuffer);
-    float withoutHack = 0x3e4a636d;// = 1,045,060,000 ... Lord outputs data in g's I don't think that is right 
-    uint32_t holder = 0x3e4a636d;
-    float withHack = * ( float * ) &holder; // Evil floating point bit hack, (WARNING PROFANITY) https://youtu.be/p8u_k2LIZyo?t=730 Thank you quake devs
-                                    // test = 0.197645g or about 2 m/s^2 (Fast but possible maybe do some testing?)
-    cout << withHack << "g" << '\n';
-    cout << withoutHack << "g" << '\n';
     return 0;
 }
