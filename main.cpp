@@ -1,9 +1,9 @@
 #include <iostream>
 #include <iomanip>
-#include <string>
 #include <cstdint>
 #include <queue>
-#include <fstream>
+
+#include <fstream> // Testing purposes only
 
 #include "data.h"
 #include "commands.h"
@@ -87,8 +87,8 @@ void parser(queue<packet_t> &pq) {
     int runs = 8;
     uint8_t firsta = 0;
     uint8_t firstg = 0;
-    vector<float> accelBuffer[20];
-    vector<float> gyroBuffer[20];
+    vector<float> accelBuffer[BUFFSIZE];
+    vector<float> gyroBuffer[BUFFSIZE];
     while (pq.size() > 0 && runs > 0) {
         
         //runs--;
@@ -120,12 +120,16 @@ void parser(queue<packet_t> &pq) {
         }
         //break;
     }
+    cout << dec << "Accel Buffer Index: " << unsigned(firsta) << '\n';
+    int counter = 0;
     for (vector<float> j : accelBuffer) {
         char c = 'x';
+        cout << "Index: " << counter << '\n';
         for (float k : j) {
             cout << c << ": " << k << '\n';
             c += 1;
         }
+        counter++;
         cout << '\n';
     }
 }
