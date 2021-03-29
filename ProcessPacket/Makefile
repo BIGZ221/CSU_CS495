@@ -7,7 +7,7 @@ main: main.o processPacket.o
 main.o: main.cc processPacket.h
 	$(CXX) $(CXXFLAGS) -c main.cc
 
-data.o: processPacket.cc processPacket.h
+processPacket.o: processPacket.cc processPacket.h
 	$(CXX) $(CXXFLAGS) -c processPacket.cc
 
 clean:
